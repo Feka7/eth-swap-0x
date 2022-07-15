@@ -40,7 +40,7 @@ function App() {
   const [tokenTo, setTokenTo] = useState({ address: '', symbol: '', image: '', decimals: '' })
   const [tokenFromMenu, setTokenFromMenu] = useState(false)
   const [tokenToMenu, setTokenToMenu] = useState(false)
-  const [error, setError] = useState("Try to ad an error in my modal popup")
+  const [error, setError] = useState()
   const [amountFrom, setAmountFrom] = useState(0)
   const [amountTo, setAmountTo] = useState({value: 0, estimatedGas: ''})
   const [queryFrom, setQueryFrom] = useState('')
@@ -168,7 +168,7 @@ function App() {
 
   return (
     <div className="md:container md:mx-auto px-4 h-screen flex justify-center items-center">
-      {error !== undefined && <MessageError />}
+      {error && <MessageError />}
       <div className="bg-yellow-100 p-8 rounded md:w-1/2 lg:w-1/3 sm:w-2/3 w-3/4">
         <div className='text-right text-orange-500'>
           <ConnectWeb3 />
