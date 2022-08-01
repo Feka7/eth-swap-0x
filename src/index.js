@@ -7,12 +7,13 @@ import {
   WagmiConfig,
   createClient,
   configureChains,
-  defaultChains,
+  chain
 } from 'wagmi'
 import { publicProvider } from 'wagmi/providers/public'
+import { avalancheChain, fantomChain, bscChain } from './tokenlist/chainListProvider';
 
 const { provider, webSocketProvider } = configureChains(
-  defaultChains,
+  [chain.mainnet, chain.polygon, chain.optimism, avalancheChain, fantomChain, bscChain],
   [publicProvider()],
 )
 
@@ -24,11 +25,9 @@ const client = createClient({
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-  <React.StrictMode>
     <WagmiConfig client={client}>
       <App />
     </WagmiConfig>
-  </React.StrictMode>
 );
 
 // If you want to start measuring performance in your app, pass a function

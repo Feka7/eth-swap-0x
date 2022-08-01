@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   XIcon,
   QuestionMarkCircleIcon,
@@ -8,47 +8,15 @@ import {
 import OutsideClickHandler from "react-outside-click-handler";
 import {
   useAccount,
-  useConnect,
-  useDisconnect,
   useNetwork,
-  useSwitchNetwork,
   useBalance,
   erc20ABI,
-  useSigner,
+  useSigner
 } from "wagmi";
-import { InjectedConnector } from "wagmi/connectors/injected";
 import { ethers } from "ethers";
-
-function ConnectWeb3() {
-  const { connector: isConnected, address, isConnecting } = useAccount();
-  const { connect } = useConnect({
-    connector: new InjectedConnector(),
-  });
-  const { disconnect } = useDisconnect();
-  const { chain } = useNetwork();
-  const { switchNetwork } = useSwitchNetwork();
-
-  if (isConnected)
-    return (
-      <>
-        <button onClick={() => disconnect()}>
-          {address.substring(0, 5)}...
-          {address.substring(address.length - 4, address.length)}
-        </button>
-        {chain && chain.id === 1 && <p>{chain.name}</p>}
-        {chain && chain.id !== 1 && (
-          <p
-            className="p-1 hover:bg-gray-50 hover:bg-opacity-80 hover:cursor-pointer"
-            onClick={() => switchNetwork(1)}
-          >
-            Please switch to Ethereum
-          </p>
-        )}
-      </>
-    );
-  if (isConnecting) return <div>Connecting...</div>;
-  return <button onClick={() => connect()}>Connect Wallet</button>;
-}
+import { tokenList } from './dataList/tokenlist'
+import { ConnectWeb3 } from './components/ConnectWeb3'
+import { chainsData } from "./dataList/chainData0x";
 
 // function ButtonApprove() {
 //   return (
@@ -57,7 +25,6 @@ function ConnectWeb3() {
 // }
 
 function App() {
-  const [tokenList, setTokenList] = useState([]);
   const [tokenFrom, setTokenFrom] = useState({
     address: "",
     symbol: "",
@@ -80,47 +47,8 @@ function App() {
   const [slippage, setSlippage] = useState(2);
   const { address, isConnected } = useAccount();
   const { data: signer } = useSigner();
-
-  useEffect(() => {
-    async function getTokenList() {
-      const response = await fetch(
-        "https://tokens.coingecko.com/uniswap/all.json"
-      );
-      if (!response.ok) {
-        setError("Error to retrieve token list, please refresh the page");
-        return;
-      }
-      const tokenListJSON = await response.json();
-
-      const response0x = await fetch("https://api.0x.org/swap/v1/tokens");
-      if (!response0x.ok) {
-        setError("Error to retrieve token list, please refresh the page");
-        return;
-      }
-      const tokenList0xJSON = await response0x.json();
-
-      const uniqueTokenList = tokenListJSON.tokens.filter((element) => {
-        let found = false;
-        for (let x in tokenList0xJSON.records) {
-          if (tokenList0xJSON.records[x].address === element.address) {
-            found = true;
-            break;
-          }
-        }
-        return found;
-      });
-      uniqueTokenList.push({
-        symbol: "ETH",
-        address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-        name: "Ether",
-        decimals: "18",
-        logoURI: "/eth.png",
-      });
-      setTokenList(uniqueTokenList);
-    }
-
-    getTokenList();
-  }, []);
+  const { chain } = useNetwork();
+  const currentChain = useRef();
 
   useEffect(() => {
     async function getPrice() {
@@ -128,8 +56,16 @@ function App() {
         tokenFrom.decimals !== "18"
           ? Number(amountFrom * 10 ** tokenFrom.decimals)
           : ethers.utils.parseEther(amountFrom).toString();
+      console.log(
+        "https://"+chainsData[chain.id].x+"api.0x.org/swap/v1/price?sellToken=" +
+          tokenFrom.address +
+          "&buyToken=" +
+          tokenTo.address +
+          "&sellAmount=" +
+          amount
+      )
       const response = await fetch(
-        "https://api.0x.org/swap/v1/price?sellToken=" +
+        "https://"+chainsData[chain.id].x+"api.0x.org/swap/v1/price?sellToken=" +
           tokenFrom.address +
           "&buyToken=" +
           tokenTo.address +
@@ -146,11 +82,14 @@ function App() {
         estimatedGas: swapPriceJSON.estimatedGas,
       });
     }
+    let prevChain = currentChain.current
+    currentChain.current = chain?.id
+    if(chain?.id && prevChain && prevChain !== currentChain.current) window.location.reload();
     if (tokenFrom.symbol === "" || tokenTo.symbol === "") return;
     if (Number(amountFrom) !== 0 && tokenFrom.address !== tokenTo.address)
       getPrice();
     return;
-  }, [tokenFrom, amountFrom, tokenTo]);
+  }, [tokenFrom, amountFrom, tokenTo, chain?.id]);
 
   function MessageError() {
     return (
@@ -187,14 +126,16 @@ function App() {
   }
 
   function TokenBalance() {
+    const { chain } = useNetwork();
+    console.log(chain.id)
     const { data, isError, isLoading } = useBalance({
       addressOrName: address,
       token:
         tokenFrom.address === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
           ? ""
           : tokenFrom.address,
-      chainId: 1,
       watch: true,
+      chainId: chain.id
     });
     if (isLoading) return "...";
     if (isError) return "error";
@@ -215,8 +156,18 @@ function App() {
       tokenFrom.decimals !== "18"
         ? Number(amountFrom * 10 ** tokenFrom.decimals)
         : ethers.utils.parseEther(amountFrom).toString();
+    console.log("https://"+chainsData[chain.id].x+"api.0x.org/swap/v1/quote?sellToken=" +
+    tokenFrom.address +
+    "&buyToken=" +
+    tokenTo.address +
+    "&sellAmount=" +
+    amount +
+    "&takerAddress=" +
+    address +
+    "&slippagePercentage=" +
+    Number(slippage) / 100)
     const response = await fetch(
-      "https://api.0x.org/swap/v1/quote?sellToken=" +
+      "https://"+chainsData[chain.id].x+"api.0x.org/swap/v1/quote?sellToken=" +
         tokenFrom.address +
         "&buyToken=" +
         tokenTo.address +
@@ -259,27 +210,13 @@ function App() {
     await signer.sendTransaction(swapQuoteJSON);
   }
 
-  let filteredTokenListFrom =
-    queryFrom === ""
-      ? tokenList
-      : tokenList.filter((token) => {
-          let res = token.symbol.startsWith(queryFrom) ? true : false;
-          return res;
-        });
-
-  let filteredTokenListTo =
-    queryTo === ""
-      ? tokenList
-      : tokenList.filter((token) => {
-          let res = token.symbol.startsWith(queryTo) ? true : false;
-          return res;
-        });
+    let chainTokenList = chain && tokenList?.[chain.id] ? tokenList[chain.id] : [] 
 
   return (
     <div className="md:container md:mx-auto px-4 h-screen flex justify-center items-center">
       {error && <MessageError />}
       <div className="bg-yellow-100 p-8 rounded md:w-1/2 lg:w-1/3 sm:w-2/3 w-3/4">
-        <div className="text-right text-orange-500">
+        <div className="text-orange-500 flex flex-col items-end gap-y-3">
           <ConnectWeb3 />
         </div>
         <p className="text-3xl font-bold text-center uppercase text-orange-400 pt-2">
@@ -326,27 +263,29 @@ function App() {
           <OutsideClickHandler onOutsideClick={() => setTokenFromMenu(false)}>
             <div className="absolute">
               <input
+                placeholder="Search..."
                 type="text"
                 className="input rounded-none w-full border-b-4 border-t-0 border-x-0 border-b-gray-200"
                 value={queryFrom}
-                onChange={(e) => setQueryFrom(e.target.value.toUpperCase())}
+                onChange={(e) => setQueryFrom(e.target.value.toUpperCase())
+                }
               ></input>
               <ul className="menu bg-base-100 w-auto overflow-y-auto h-56 scrollbar-hide">
-                {filteredTokenListFrom.map((token) => (
+                {chainTokenList.map((token) => (
                   <li key={token.address} className="hover:bg-gray-50">
                     <div
                       onClick={() =>
                         setTokenFrom({
                           address: token.address,
                           symbol: token.symbol,
-                          image: token.logoURI,
+                          image: token.image,
                           decimals: token.decimals,
                         })
                       }
                     >
                       <img
                         alt=""
-                        src={token.logoURI}
+                        src={token.image}
                         className="object-scale-down"
                       ></img>
                       {token.symbol}
@@ -402,27 +341,28 @@ function App() {
           <OutsideClickHandler onOutsideClick={() => setTokenToMenu(false)}>
             <div className="absolute">
               <input
+                placeholder="Search..."
                 type="text"
                 className="input rounded-none w-full border-b-4 border-t-0 border-x-0 border-b-gray-200"
                 value={queryTo}
                 onChange={(e) => setQueryTo(e.target.value.toUpperCase())}
               ></input>
               <ul className="menu bg-base-100 w-auto overflow-y-auto h-56 scrollbar-hide">
-                {filteredTokenListTo.map((token) => (
+                {chainTokenList.map((token) => (
                   <li key={token.address} className="hover:bg-gray-50">
                     <div
                       onClick={() =>
                         setTokenTo({
                           address: token.address,
                           symbol: token.symbol,
-                          image: token.logoURI,
+                          image: token.image,
                           decimals: token.decimals,
                         })
                       }
                     >
                       <img
                         alt=""
-                        src={token.logoURI}
+                        src={token.image}
                         className="object-scale-down"
                       ></img>
                       {token.symbol}
