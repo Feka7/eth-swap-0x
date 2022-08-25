@@ -6,18 +6,11 @@ import {
   ChevronUpIcon,
 } from "@heroicons/react/solid";
 import OutsideClickHandler from "react-outside-click-handler";
-import {
-  useAccount,
-  useNetwork,
-  useBalance,
-  erc20ABI,
-  useSigner
-} from "wagmi";
-import { ethers } from "ethers";
-import { tokenList } from './dataList/tokenlist'
-import { ConnectWeb3 } from './components/ConnectWeb3'
+import { useAccount, useNetwork, useBalance, erc20ABI, useSigner } from "wagmi";
+import { ethers, BigNumber } from "ethers";
+import { tokenList } from "./dataList/tokenlist";
+import { ConnectWeb3 } from "./components/ConnectWeb3";
 import { chainsData } from "./dataList/chainData0x";
-
 
 // function ButtonApprove() {
 //   return (
@@ -41,6 +34,7 @@ function App() {
   const [tokenFromMenu, setTokenFromMenu] = useState(false);
   const [tokenToMenu, setTokenToMenu] = useState(false);
   const [error, setError] = useState();
+  const [swap, isSwapping] = useState(false)
   const [amountFrom, setAmountFrom] = useState(0);
   const [amountTo, setAmountTo] = useState({ value: 0, estimatedGas: "" });
   const [queryFrom, setQueryFrom] = useState("");
@@ -62,15 +56,19 @@ function App() {
           ? Number(amountFrom * 10 ** tokenFrom.decimals)
           : ethers.utils.parseEther(amountFrom).toString();
       console.log(
-        "https://"+chainsData[chain.id].x+"api.0x.org/swap/v1/price?sellToken=" +
+        "https://" +
+          chainsData[chain.id].x +
+          "api.0x.org/swap/v1/price?sellToken=" +
           tokenFrom.address +
           "&buyToken=" +
           tokenTo.address +
           "&sellAmount=" +
           amount
-      )
+      );
       const response = await fetch(
-        "https://"+chainsData[chain.id].x+"api.0x.org/swap/v1/price?sellToken=" +
+        "https://" +
+          chainsData[chain.id].x +
+          "api.0x.org/swap/v1/price?sellToken=" +
           tokenFrom.address +
           "&buyToken=" +
           tokenTo.address +
@@ -87,12 +85,12 @@ function App() {
         estimatedGas: swapPriceJSON.estimatedGas,
       });
     }
-    let prevChain = currentChain.current
-    currentChain.current = chain?.id
-    if(chain?.id && prevChain && prevChain !== currentChain.current) window.location.reload();
+    let prevChain = currentChain.current;
+    currentChain.current = chain?.id;
+    if (chain?.id && prevChain && prevChain !== currentChain.current)
+      window.location.reload();
     if (tokenFrom.symbol === "" || tokenTo.symbol === "") return;
-    if (Number(amountFrom) !== 0 && tokenFrom.address !== tokenTo.address)
-      getPrice();
+    if (Number(amountFrom) !== 0) getPrice();
     return;
   }, [tokenFrom, amountFrom, tokenTo, chain?.id, isConnected]);
 
@@ -114,7 +112,19 @@ function App() {
 
   function ButtonSwap() {
     const { chain } = useNetwork();
-    if (!chain)
+    if(swap) return (
+      <button
+        className="bg-sky-500 p-2 rounded hover:bg-sky-400 active:bg-sky-500 text-white uppercase font-bold"
+      >
+      <progress class="progress progress-warning w-12 h-3"></progress>
+      </button>
+    )
+    if (
+      !chain ||
+      tokenFrom.address === "" ||
+      tokenTo.address === "" ||
+      Number(amountFrom) === 0
+    )
       return (
         <button className="bg-sky-300 hover:cursor-not-allowed p-2 rounded text-white uppercase font-bold">
           Swap
@@ -139,18 +149,47 @@ function App() {
           ? ""
           : tokenFrom.address,
       watch: true,
-      chainId: chain.id
+      chainId: chain.id,
     });
     if (isLoading) return "...";
     if (isError) return "error";
     return (
       <span
-        onClick={() => setAmountFrom(data?.formatted)}
+        onClick={() => setAmountFrom(String(Number(data?.formatted) * (10 ** (18 - Number(data?.decimals)))))}
         className="hover:cursor-pointer"
       >
-        {data?.formatted.substring(0, 8)}
+        {String(Number(data?.formatted) * (10 ** (18 - Number(data?.decimals)))).substring(0, 8)}
       </span>
     );
+  }
+
+  async function getAllowance() {
+    const amount =
+      tokenFrom.decimals !== "18"
+        ? Number(amountFrom * 10 ** tokenFrom.decimals)
+        : ethers.utils.parseEther(amountFrom).toString();
+    console.log(
+      "https://" +
+        chainsData[chain.id].x +
+        "api.0x.org/swap/v1/price?sellToken=" +
+        tokenFrom.address +
+        "&buyToken=" +
+        tokenTo.address +
+        "&sellAmount=" +
+        amount
+    );
+    const response = await fetch(
+      "https://" +
+        chainsData[chain.id].x +
+        "api.0x.org/swap/v1/price?sellToken=" +
+        tokenFrom.address +
+        "&buyToken=" +
+        tokenTo.address +
+        "&sellAmount=" +
+        amount
+    );
+    const swapPriceJSON = await response.json();
+    return swapPriceJSON;
   }
 
   async function getQuote() {
@@ -160,18 +199,11 @@ function App() {
       tokenFrom.decimals !== "18"
         ? Number(amountFrom * 10 ** tokenFrom.decimals)
         : ethers.utils.parseEther(amountFrom).toString();
-    console.log("https://"+chainsData[chain.id].x+"api.0x.org/swap/v1/quote?sellToken=" +
-    tokenFrom.address +
-    "&buyToken=" +
-    tokenTo.address +
-    "&sellAmount=" +
-    amount +
-    "&takerAddress=" +
-    address +
-    "&slippagePercentage=" +
-    Number(slippage) / 100)
+  
     const response = await fetch(
-      "https://"+chainsData[chain.id].x+"api.0x.org/swap/v1/quote?sellToken=" +
+      "https://" +
+        chainsData[chain.id].x +
+        "api.0x.org/swap/v1/quote?sellToken=" +
         tokenFrom.address +
         "&buyToken=" +
         tokenTo.address +
@@ -189,7 +221,9 @@ function App() {
   }
 
   async function TrySwap() {
-    const swapQuoteJSON = await getQuote(address);
+    isSwapping(true)
+    try {
+    const swapPriceJSON = await getAllowance();
 
     // Set Token Allowance
     // Set up approval amount
@@ -204,19 +238,49 @@ function App() {
       erc20ABI,
       signer
     );
-    const tx = await ERC20TokenContract.approve(
-      swapQuoteJSON.allowanceTarget,
-      maxApproval
-    );
-    await tx.wait();
-    console.log("approve");
 
-    await signer.sendTransaction(swapQuoteJSON);
+    const currentAllowance = BigNumber.from(
+      await ERC20TokenContract.allowance(address, swapPriceJSON.allowanceTarget)
+    ).toNumber();
+    console.log(currentAllowance)
+    if (currentAllowance < Number(amountFrom)) {
+      console.log(currentAllowance)
+      const tx = await ERC20TokenContract.approve(
+        swapPriceJSON.allowanceTarget,
+        maxApproval
+      );
+      await tx.wait();
+      console.log("approve");
+    }
+
+    const swapQuoteJSON = await getQuote(address);
+    await signer.sendTransaction({
+      to: swapQuoteJSON.to,
+      from: swapQuoteJSON.from,
+      data: swapQuoteJSON.data,
+      value: swapQuoteJSON.value,
+      chainId: swapQuoteJSON.chainId,
+      gasPrice: swapQuoteJSON.gasPrice,
+      gasLimit: swapQuoteJSON.gas
+    });
+  }
+  finally {
+    isSwapping(false)
+  }
   }
 
-    let chainTokenList = chain && tokenList?.[chain.id] ? tokenList[chain.id] : []
-    let chainTokenListFrom = chain && chainTokenList.filter((c) => c.address !== tokenTo.address && c.address !== tokenFrom.address)
-    let chainTokenListTo = chain && chainTokenList.filter((c) => c.address !== tokenFrom.address && c.address !== tokenTo.address)
+  let chainTokenList =
+    chain && tokenList?.[chain.id] ? tokenList[chain.id] : [];
+  let chainTokenListFrom =
+    chain &&
+    chainTokenList.filter(
+      (c) => c.address !== tokenTo.address && c.address !== tokenFrom.address
+    );
+  let chainTokenListTo =
+    chain &&
+    chainTokenList.filter(
+      (c) => c.address !== tokenFrom.address && c.address !== tokenTo.address
+    );
 
   return (
     <div className="md:container md:mx-auto px-4 h-screen flex justify-center items-center">
@@ -245,12 +309,9 @@ function App() {
                   src={tokenFrom.image}
                   className="pr-1 mx-auto"
                 ></img>
-                <p>
-                {tokenFrom.symbol}
-                </p>
+                <p>{tokenFrom.symbol}</p>
               </div>
             )}
-            
           </div>
           <div className="w-full col-span-2">
             <label
@@ -276,8 +337,7 @@ function App() {
                 type="text"
                 className="input rounded-none w-full border-b-4 border-t-0 border-x-0 border-b-gray-200"
                 value={queryFrom}
-                onChange={(e) => setQueryFrom(e.target.value.toUpperCase())
-                }
+                onChange={(e) => setQueryFrom(e.target.value.toUpperCase())}
               ></input>
               <ul className="menu bg-base-100 w-auto overflow-y-auto h-56 scrollbar-hide">
                 {chainTokenListFrom.map((token) => (
@@ -291,7 +351,6 @@ function App() {
                           decimals: token.decimals,
                         })
                       }
-                    
                     >
                       <img
                         alt=""
@@ -301,7 +360,7 @@ function App() {
                       {token.symbol}
                     </div>
                   </li>
-        ))}
+                ))}
               </ul>
             </div>
           </OutsideClickHandler>
