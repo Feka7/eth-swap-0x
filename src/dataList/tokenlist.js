@@ -127,6 +127,12 @@ export const tokenList = {
         symbol: "FTM",
         image: "https://assets.coingecko.com/coins/images/4001/small/Fantom.png?1558015016",
         decimals: "18",
+      },
+      {
+        address: "0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83",
+        symbol: "WFTM",
+        image: "https://assets.spooky.fi/tokens/wFTM.png",
+        decimals: "18",
       }
   ],
   43114: [

@@ -18,6 +18,7 @@ import { tokenList } from './dataList/tokenlist'
 import { ConnectWeb3 } from './components/ConnectWeb3'
 import { chainsData } from "./dataList/chainData0x";
 
+
 // function ButtonApprove() {
 //   return (
 //     <button className="bg-sky-300 p-2 rounded hover:bg-sky-400 active:bg-sky-500 text-white uppercase font-bold">Approve</button>
@@ -45,7 +46,11 @@ function App() {
   const [queryFrom, setQueryFrom] = useState("");
   const [queryTo, setQueryTo] = useState("");
   const [slippage, setSlippage] = useState(2);
-  const { address, isConnected } = useAccount();
+  const { address, isConnected } = useAccount({
+    onDisconnect() {
+      window.location.reload();
+    },
+  });
   const { data: signer } = useSigner();
   const { chain } = useNetwork();
   const currentChain = useRef();
@@ -89,7 +94,7 @@ function App() {
     if (Number(amountFrom) !== 0 && tokenFrom.address !== tokenTo.address)
       getPrice();
     return;
-  }, [tokenFrom, amountFrom, tokenTo, chain?.id]);
+  }, [tokenFrom, amountFrom, tokenTo, chain?.id, isConnected]);
 
   function MessageError() {
     return (
@@ -109,7 +114,7 @@ function App() {
 
   function ButtonSwap() {
     const { chain } = useNetwork();
-    if (!chain || chain.id !== 1)
+    if (!chain)
       return (
         <button className="bg-sky-300 hover:cursor-not-allowed p-2 rounded text-white uppercase font-bold">
           Swap
@@ -127,7 +132,6 @@ function App() {
 
   function TokenBalance() {
     const { chain } = useNetwork();
-    console.log(chain.id)
     const { data, isError, isLoading } = useBalance({
       addressOrName: address,
       token:
@@ -210,12 +214,14 @@ function App() {
     await signer.sendTransaction(swapQuoteJSON);
   }
 
-    let chainTokenList = chain && tokenList?.[chain.id] ? tokenList[chain.id] : [] 
+    let chainTokenList = chain && tokenList?.[chain.id] ? tokenList[chain.id] : []
+    let chainTokenListFrom = chain && chainTokenList.filter((c) => c.address !== tokenTo.address && c.address !== tokenFrom.address)
+    let chainTokenListTo = chain && chainTokenList.filter((c) => c.address !== tokenFrom.address && c.address !== tokenTo.address)
 
   return (
     <div className="md:container md:mx-auto px-4 h-screen flex justify-center items-center">
       {error && <MessageError />}
-      <div className="bg-yellow-100 p-8 rounded md:w-1/2 lg:w-1/3 sm:w-2/3 w-3/4">
+      <div className="bg-yellow-100 p-8 rounded md:w-2/3 lg:w-1/2 sm:w-2/3 w-3/4">
         <div className="text-orange-500 flex flex-col items-end gap-y-3">
           <ConnectWeb3 />
         </div>
@@ -230,8 +236,8 @@ function App() {
                 onClick={() => setTokenFromMenu(!tokenFromMenu)}
               />
             ) : (
-              <p
-                className="rounded hover:bg-gray-50 hover:bg-opacity-80 hover:cursor-pointer p-3 sm:flex uppercase font-bold text-xl text-gray-600"
+              <div
+                className="rounded hover:bg-gray-50 hover:bg-opacity-80 hover:cursor-pointer p-3 sm:flex items-center uppercase font-bold text-xl text-gray-600"
                 onClick={() => setTokenFromMenu(!tokenFromMenu)}
               >
                 <img
@@ -239,9 +245,12 @@ function App() {
                   src={tokenFrom.image}
                   className="pr-1 mx-auto"
                 ></img>
+                <p>
                 {tokenFrom.symbol}
-              </p>
+                </p>
+              </div>
             )}
+            
           </div>
           <div className="w-full col-span-2">
             <label
@@ -271,8 +280,8 @@ function App() {
                 }
               ></input>
               <ul className="menu bg-base-100 w-auto overflow-y-auto h-56 scrollbar-hide">
-                {chainTokenList.map((token) => (
-                  <li key={token.address} className="hover:bg-gray-50">
+                {chainTokenListFrom.map((token) => (
+                  <li key={token.address}>
                     <div
                       onClick={() =>
                         setTokenFrom({
@@ -282,6 +291,7 @@ function App() {
                           decimals: token.decimals,
                         })
                       }
+                    
                     >
                       <img
                         alt=""
@@ -291,7 +301,7 @@ function App() {
                       {token.symbol}
                     </div>
                   </li>
-                ))}
+        ))}
               </ul>
             </div>
           </OutsideClickHandler>
@@ -310,13 +320,13 @@ function App() {
                 onClick={() => setTokenToMenu(!tokenFromMenu)}
               />
             ) : (
-              <p
-                className="rounded hover:bg-gray-50 hover:bg-opacity-80 hover:cursor-pointer p-3 sm:flex uppercase font-bold text-xl text-gray-600"
+              <div
+                className="rounded hover:bg-gray-50 hover:bg-opacity-80 hover:cursor-pointer p-3 sm:flex items-center uppercase font-bold text-xl text-gray-600"
                 onClick={() => setTokenToMenu(!tokenFromMenu)}
               >
                 <img alt="" src={tokenTo.image} className="pr-1 mx-auto"></img>
-                {tokenTo.symbol}
-              </p>
+                <p>{tokenTo.symbol}</p>
+              </div>
             )}
           </div>
           <div className="w-full col-span-2">
@@ -348,7 +358,7 @@ function App() {
                 onChange={(e) => setQueryTo(e.target.value.toUpperCase())}
               ></input>
               <ul className="menu bg-base-100 w-auto overflow-y-auto h-56 scrollbar-hide">
-                {chainTokenList.map((token) => (
+                {chainTokenListTo.map((token) => (
                   <li key={token.address} className="hover:bg-gray-50">
                     <div
                       onClick={() =>
